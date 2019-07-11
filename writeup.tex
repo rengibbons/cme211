@@ -1,0 +1,190 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=1in, paperwidth=8.5in, paperheight=11in]{geometry}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{float}
+\usepackage{graphicx}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Stanford University}
+\lhead{CME 211}
+\rfoot{\thepage}
+\lfoot{Ren Gibbons}
+
+\begin{document}
+
+  \begin{center}
+    \begin{large}
+      Implementation of a 2D heat solver using a conjugate gradient algorithm \\
+    \end{large}
+    \vspace{0.1in}
+    Ren Gibbons \\
+    December 14, 2016
+  \end{center}
+
+\section{Overview}
+  This document provides an overview a 2D heat solver program written for the CME 211 course project at Stanford University. The code's application is to determine the distribution of temperature through the shell of a pipe carrying hot fluid. In this scenario, a hot fluid with fixed temperature flows through a pipe, and a cooling agent surrounds the pipe's exterior. The boundary solved is a rectangular slice along the length of the pipe where the top and bottom boundaries have a fixed temperature. The right and left boundary conditions are periodic, meaning that we model the nodes on the left boundary and the right boundary as coincident locations. Periodic boundary conditions ensure symmetry of the linear system and allow us to repeat the boundary over any number of periods. \\\\
+  The heat solver uses the finite difference method satisfying the discretized Laplace partial differential equation 
+  
+  \begin{equation*}
+  \frac{1}{h^2}(u_{i-1,j}+u_{i+1,j}+u_{i,j-1}+u_{i,j+1}-4u_{i,j}) = 0
+  \end{equation*}
+  
+  \noindent
+  to assemble a linear system of equations \cite{part2}. The system $Ax=b$ is solved using the conjugate gradient algorithm. The conjugate gradient algorithm is an efficient iterative approach to solving sparse linear systems. The implementation of the CG method was required for the first submission of the project \cite{part1}. This document contains sections describing the conjugate gradient solver, use of the code, and basic results.
+  
+\section{Conjugate gradient solver}
+  The code is structured such that the \texttt{Heat} class contains a method \texttt{Setup()} that assembles a linear system matrix $A$ and a right hand side vector $b$. Matrix $A$ is a sparse matrix whose data attributes are contained in an object of the \texttt{SparseMatrix} class. \texttt{SparseMatrix} contains the following private variables: number of rows (\texttt{int}), number of columns (\texttt{int}), row data (\texttt{std::vector<int>}), column data (\texttt{std::vector<int>}), and element entry data (\texttt{std::vector<double>}). Once the system is assembled, the \texttt{Heat} method \texttt{Solve()} calls a function \texttt{CGSolver()} to find the solution to the linear system. The conjugate gradient algorithm is presented in the psuedocode on the following page.
+  
+  The conjugate gradient algorithm uses several common matrix operations which are contained in the source file \texttt{matvecops.cpp} to reduce clutter in the primary solver code. The methods contained in \texttt{matvecops.cpp} are:
+  
+  \begin{itemize}[noitemsep]
+    \item \texttt{addVecs()} : Add the elements of two similar-sized vectors.
+      Return a vector. 
+    \item \texttt{L2norm()} : Compute the $L^2$-norm of a vector. Return a
+      scalar.
+    \item \texttt{multMatVec()} : Multiply a square matrix by a
+      dimensionally homogeneous column vector. Return a vector.
+    \item \texttt{multScalar()} : Multiply the elements of a vector by a
+    scalar. Return a vector.
+    \item \texttt{multVecMatVec()} : Multiply the transpose of column vector
+    by a square matrix by the same column vector. Return a scalar. 
+    \item \texttt{multVecs()} : Perform the dot product of two similar-sized
+    vectors. Return a scalar.
+    \item \texttt{subVecs()} : Subtract the elements of two similar-sized
+    vectors. Return a vector.
+  \end{itemize}
+
+\begin{algorithm}
+\caption{Conjugate gradient solver}
+  \begin{algorithmic}
+    \STATE initialize $\mathbf{u_\circ} = \mathbf{1}$
+    \STATE $\mathbf{r_\circ} = \mathbf{b} - \mathbf{Au_\circ}$
+    \STATE $|\mathbf{r_\circ}|_{L^2} = \sqrt{\sum{\mathbf{r_\circ}}}$
+    \STATE $\mathbf{p_\circ} = \mathbf{r_\circ}$
+    \STATE $n_{iter} = 0$
+    \WHILE{$n_{iter} < n_{max}$}
+      \STATE $n_{iter} = n_{iter} + 1$
+      \STATE $\alpha_n = (\mathbf{r}_n^T \mathbf{r}_n) / (\mathbf{p}_n^T 
+              \mathbf{A p}_n)$
+      \STATE $\mathbf{u}_{n+1} = \mathbf{u}_n + \alpha_n \mathbf{p}_n$
+      \STATE $\mathbf{r}_{n+1} = \mathbf{r}_n - \alpha_n \mathbf{Ap}_n$
+      \STATE $|\mathbf{r}_{n+1}|_{L^2} = \sqrt{\sum{\mathbf{r}_{n+1}}}$
+      \IF{$|\mathbf{r}_{n+1}|_{L^2} / |\mathbf{r_\circ}|_{L^2} < 0$}
+        \STATE break
+      \ENDIF
+      \STATE $\beta_n = (\mathbf{r}_{n+1}^T\mathbf{r}_{n+1}) /
+              (\mathbf{r}_n^T\mathbf{r}_n)$
+      \STATE $\mathbf{p}_{n+1} = \mathbf{r}_{n+1} + \beta_n\mathbf{p}_n$
+    \ENDWHILE
+  \end{algorithmic}
+\end{algorithm}
+
+\section{Using the code}
+Using the 2D solver requires the following files:
+\begin{itemize}[noitemsep]
+  \item\texttt{makefile}
+  \item\texttt{main.cpp}
+  \item\texttt{postprocess.py}
+  \item\texttt{GCSolver.cpp}
+  \item\texttt{CGSolver.hpp}
+  \item\texttt{COO2CSR.cpp}
+  \item\texttt{COO2CSR.hpp}
+  \item\texttt{heat.cpp}
+  \item\texttt{heat.hpp}
+  \item\texttt{matvecops.cpp}
+  \item\texttt{matvecops.hpp}
+  \item\texttt{sparse.cpp}
+  \item\texttt{sparse.hpp}
+\end{itemize}
+
+\noindent
+The data defining the boundary size, discretization, and top and bottom temperatures are read from a .txt file with the format: \vspace{0.1in}\\
+\noindent
+\texttt{length width h} \\
+\texttt{Tc Th} \\
+
+\noindent
+If the code has not yet been compiled, type in the terminal:\\
+\texttt{\$make} \vspace{0.01in}\\
+
+\noindent
+To remove all intermediate object files, type:\\
+\texttt{\$make clean} \vspace{0.01in}\\
+
+\noindent
+To solve the boundary value problem, type: \\
+\texttt{\$./main <input file> <solution prefix>} \vspace{0.01in}\\
+
+\noindent
+The program writes the solution to a .txt file for the first and last iteration as well as for every tenth iteration of the form \texttt{solution000.txt, solution010.txt,} etc. If the problem converges, the console will output the following: \\
+\texttt{SUCCESS: CG Solver converged in xxx iterations.} \vspace{0.01in}\\
+
+\noindent
+Next, to post-process the data, use the Python script \texttt{postprocess.py} as follows: \\
+\texttt{\$python3 postprocess.py <input file> <solution file>} \vspace{0.1in}\\
+Post-processing generates a temperature pseudocolor plot with an isoline of the mean temperature in the domain. The terminal output is:\\
+\texttt{Input file processed: <input file>}\\
+\texttt{Mean temperature: xxx.xxxxx} \vspace{0.01in}\\
+
+\noindent
+Note: The solution file contains the name of the input file that was read to generate the solution. This is compared to the command line input file, and if the two names do not match, an exception is thrown. Therefore, there is no chance of crashing the program or encountering unexpected behavior if incompatible input and solution files are provided. 
+
+\section{Results}
+Figures 1 and 2 were generated using the heat solver program. Figure 1 shows the same domain size and temperatures as the provided file \texttt{input1.txt}. The left plot shows a coarse discretization of $h=0.1$ and the right plot shows a finer discretization of $h=0.01$. Similarly, Figure 2 is a simulation of the same problem as the provided \texttt{input2.txt}, but the left plot has a discretization of $h=0.05$ and the right of $h=0.005$. The mean temperature of the four simulations are provided in the table below.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{solution3.png}
+\end{minipage}%
+\begin{minipage}{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{solution4.png}
+\end{minipage}
+  \caption{$x=1.5$, $y=1.0$, $T_h=200$, $T_c=20$ \\
+           $h_{left} = 0.1$, $h_{right} = 0.01$}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{solution1.png}
+\end{minipage}%
+\begin{minipage}{.5\textwidth}
+  \centering
+  \includegraphics[width=1\linewidth]{solution2.png}
+\end{minipage}
+  \caption{$x=1.0$, $y=0.3$, $T_h=120$, $T_c=30$ \\
+           $h_{left} = 0.05$, $h_{right} = 0.005$}
+\end{figure}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+  \hline
+   & coarse mesh & fine mesh \\
+  \hline
+  input1.txt & 116.466 & 116.287 \\
+  input2.txt & 82.092 & 81.832 \\
+  \hline 
+\end{tabular}
+\captionof{table}{Mean temperatures for several simulations}
+\end{center}
+
+\begin{thebibliography}{3}
+  \bibitem{part1}
+  Henderson, Nick. \textit{CME 211: Project Part 1}, 2016.
+  
+  \bibitem{part2}
+  Henderson, Nick. \textit{CME 211: Project Part 2}, 2016.
+\end{thebibliography}
+
+\end{document}
